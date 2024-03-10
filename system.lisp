@@ -1,8 +1,8 @@
 ;;;; -*- Mode: Lisp -*-
 ;;;; $Id$
-;;;; 
+;;;;
 ;;;; Copyright (c) 2009 Steve Knight <stkni@gmail.com>
-;;;; 
+;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
 ;;;; "Software"), to deal in the Software without restriction, including
@@ -10,10 +10,10 @@
 ;;;; distribute, sublicense, and/or sell copies of the Software, and to
 ;;;; permit persons to whom the Software is furnished to do so, subject to
 ;;;; the following conditions:
-;;;; 
+;;;;
 ;;;; The above copyright notice and this permission notice shall be
 ;;;; included in all copies or substantial portions of the Software.
-;;;; 
+;;;;
 ;;;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ;;;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ;;;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -190,7 +190,7 @@
 
 (defmacro defmysqlfun ((name internal-name) return-type &body args)
   "Takes a mysql function name as a string and registers the
-   appropriate CFFI function as internal-name.  
+   appropriate CFFI function as internal-name.
 
    If *generate-alt-fns* is T internal-name that denotes T a wrapper function
    that sits around the function lib<internal-name>.
@@ -199,7 +199,7 @@
    property set on the function's symbol.   If such a function exists it is called
    instead.
 
-   e.g.  
+   e.g.
    CL-USER> (connect)
    CL-USER> (setf (get 'mysql-close 'alt-fn) (lambda (db)
                                                (print \"Closing! \")
@@ -226,7 +226,15 @@
 	`(defcfun (,n ,int-name) ,return-type
 	   ,mysql-doc-ref
 	   ,@args))))
- 
+
+(defmysqlfun ("mysql_ssl_set" mysql-ssl-set) :int
+  (mysql :pointer)
+  (key :string)
+  (cert :string)
+  (ca :string)
+  (cpath :string)
+  (cipher :string))
+
 (defmysqlfun ("mysql_init" mysql-init) :pointer
   (mysql :pointer))
 
@@ -481,4 +489,3 @@
   (store-param-func :pointer)
   (fetch-result-func :pointer)
   (skip-result-func :pointer))
-

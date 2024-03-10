@@ -1,8 +1,8 @@
 ;;;; -*- Mode: Lisp -*-
 ;;;; $Id$
-;;;; 
+;;;;
 ;;;; Copyright (c) 2009 Steve Knight <stkni@gmail.com>
-;;;; 
+;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
 ;;;; "Software"), to deal in the Software without restriction, including
@@ -10,10 +10,10 @@
 ;;;; distribute, sublicense, and/or sell copies of the Software, and to
 ;;;; permit persons to whom the Software is furnished to do so, subject to
 ;;;; the following conditions:
-;;;; 
+;;;;
 ;;;; The above copyright notice and this permission notice shall be
 ;;;; included in all copies or substantial portions of the Software.
-;;;; 
+;;;;
 ;;;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ;;;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ;;;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -25,13 +25,14 @@
 (in-package "CL-MYSQL-SYSTEM")
 
 (defparameter *last-database* nil
-  "The last allocated connection-pool.   Note that this special is a default 
+  "The last allocated connection-pool.   Note that this special is a default
    argument to a lot of the higher level API functions.")
 
 (defparameter *debug* t)
 
 (defclass connection-pool (connectable)
-  ((hostname :reader hostname :initarg :hostname :initform nil)
+  ((ssl-ca :reader ssl-ca :initarg :ssl-ca :initform nil)
+   (hostname :reader hostname :initarg :hostname :initform nil)
    (username :reader username :initarg :username :initform nil)
    (password :reader password :initarg :password :initform nil)
    (database :reader database :initarg :database :initform nil)
@@ -86,20 +87,26 @@
 
 (defmethod connect-to-server ((self connection-pool))
   "Create a new single connection and add it to the pool."
-  (let* ((mysql (mysql-init (null-pointer)))
-	 (connection (mysql-real-connect mysql
-					 (or (hostname self) "localhost")
-					 (or (username self) (null-pointer))
-					 (or (password self) (null-pointer))
-					 (or (database self) (null-pointer))
-					 (or (port self) 0)
-					 (or (socket self) (null-pointer))
-					 (flags self))))
-    (error-if-null mysql connection)
-    (add-connection self (make-instance 'connection
-					:pointer  connection
-					:owner-pool self
-					:in-use nil))))
+  (let ((mysql (mysql-init (null-pointer))))
+    (when (ssl-ca self)
+      (mysql-ssl-set mysql (null-pointer)
+                     (null-pointer)
+                     (ssl-ca self)
+                     (null-pointer)
+                     (null-pointer)))
+    (let ((connection (mysql-real-connect mysql
+                                          (or (hostname self) "localhost")
+                                          (or (username self) (null-pointer))
+                                          (or (password self) (null-pointer))
+                                          (or (database self) (null-pointer))
+                                          (or (port self) 0)
+                                          (or (socket self) (null-pointer))
+                                          (flags self))))
+      (error-if-null mysql connection)
+      (add-connection self (make-instance 'connection
+                                          :pointer  connection
+                                          :owner-pool self
+                                          :in-use nil)))))
 
 (defmethod disconnect-from-server ((self connection)  conn)
   (disconnect-from-server (owner-pool self) (or conn self)))
@@ -111,9 +118,9 @@
   (mysql-close (pointer conn)))
 
 (defmethod count-connections ((self connection-pool))
-  "Count the number of connections in the pool.   If you are dynamically 
-   changing the size of the pool after it is created this number could be 
-   greater or less than  max/min connections.   Set :available-only if you 
+  "Count the number of connections in the pool.   If you are dynamically
+   changing the size of the pool after it is created this number could be
+   greater or less than  max/min connections.   Set :available-only if you
    only want to know how many connections are currently ready to use."
   ;; Mutex
   (values
@@ -132,7 +139,7 @@
 
 (defmethod connect-upto-minimum ((self connection-pool) n min)
   "We use this method to allocate up to the minimum number of connections.
-   It is called once after initialize-instance and will be called again every 
+   It is called once after initialize-instance and will be called again every
    time a connection is acquired from the pool."
   ;; Mutex
   (loop for i from 0 to (1- (- min n))
@@ -152,13 +159,13 @@
 
 
 (defmethod take-first ((self connection-pool))
-  "Take the first available connection from the pool.   If there are none, 
+  "Take the first available connection from the pool.   If there are none,
    NIL is returned."
   (with-lock (pool-lock self)
-    ;; If we can't aquire a connection return nil 
+    ;; If we can't aquire a connection return nil
     (if (not (can-aquire self))
         (return-from take-first nil))
-    
+
     ;; We can aquire but it might be because the max-number of connections
     ;; has changed so connect up to the minimum required to service this
     ;; request.
@@ -166,7 +173,7 @@
       (connect-upto-minimum self total
                             (if (> available 0)
                                 (min-connections self)
-                              (min 
+                              (min
                                (max-connections self)
                                (1+ total)))))
     ;; There now must be a connection available in the pool, so find the
@@ -183,12 +190,12 @@
   (error 'cl-mysql-error :message "There is no available pool to aquire from!"))
 
 (defmethod aquire ((self connection-pool) (block t))
-  "Aquire from the pool a single connection object that can be passed to higher 
-   level API functions like QUERY.   
+  "Aquire from the pool a single connection object that can be passed to higher
+   level API functions like QUERY.
 
-   On implementations that support threading this method will block if :block 
-   is T, and available connections is 0  and there are already max-connections.   
-   On implementations that do not support threading this method will always 
+   On implementations that support threading this method will block if :block
+   is T, and available connections is 0  and there are already max-connections.
+   On implementations that do not support threading this method will always
    return NIL."
   (let ((candidate (take-first self)))
     (if (not  candidate)
@@ -222,7 +229,7 @@
   (setf (result-set self) (null-pointer)
 	(result-set-fields self) nil
 	(in-use self) nil))
-  
+
 (defmethod return-to-available ((self connection-pool) &optional conn)
   "If the connection is not in the expected state raise an error."
   (if (or (not (in-use conn))
@@ -232,22 +239,22 @@
   (vector-push-extend conn (available-connections self)))
 
 (defmethod clean-connections ((self connection-pool) array)
-  "Housekeeping to remove null connections from the end of the connections 
+  "Housekeeping to remove null connections from the end of the connections
    array.   Pool should be locked."
   (setf (fill-pointer array)
 	(do ((i (1- (fill-pointer array)) (decf i)))
 	    ((or (< i 0) (elt array i)) (1+ i)))))
 
 (defmethod consume-unused-results ((self connection))
-  "If a client attempts to release a connection without consuming all the 
-   results then we take care of that for them.  Because we are probably 
-   being called from release don't also auto-release when we reach the 
+  "If a client attempts to release a connection without consuming all the
+   results then we take care of that for them.  Because we are probably
+   being called from release don't also auto-release when we reach the
    last result!"
   (loop while (next-result-set self :dont-release t)))
 
 (defmethod return-or-close ((self connection-pool) (conn connection))
-  "Given a pool and a connection, close it if there are more than 
-   min-connections or return it to the pool if we have less than or equal 
+  "Given a pool and a connection, close it if there are more than
+   min-connections or return it to the pool if we have less than or equal
    to min-connections"
 
   ;; These don't strictly need to be locked because we make no guarantees
@@ -280,37 +287,38 @@
   (return-or-close self conn)
   (values))
 
-(defun connect (&key host user password database port socket
+(defun connect (&key host user password database port socket ssl-ca
 		(client-flag (list +client-compress+
 				   +client-multi-statements+
 				   +client-multi-results+))
 		(min-connections 1) (max-connections 1))
   "Connect will present to MySQL sensible defaults for all the connection items.
-   The following code will attach you to a MySQL instance running on localhost, 
-   as the current user with no password.   It will automatically turn on 
-   compression between client-and-server and also enable multiple-result sets 
+   The following code will attach you to a MySQL instance running on localhost,
+   as the current user with no password.   It will automatically turn on
+   compression between client-and-server and also enable multiple-result sets
    if possible.
 
    <pre><code>CL-USER> (connect)</code></pre>
 
-   If unsuccesful connect will raise a <strong>CL-MYSQL-ERROR</strong>, otherwise it will place 
-   the connection into a pool, note that all connections are pool-able, 
-   a single connection is simply the special case of a pool with only one 
-   connection.  
+   If unsuccesful connect will raise a <strong>CL-MYSQL-ERROR</strong>, otherwise it will place
+   the connection into a pool, note that all connections are pool-able,
+   a single connection is simply the special case of a pool with only one
+   connection.
 
-   The pool has two slots, <strong>min-connections</strong> and <srong>max-connections</strong>. There will 
+   The pool has two slots, <strong>min-connections</strong> and <srong>max-connections</strong>. There will
    always be min-connections available in the pool.   If you are using all
    min-connections and max-connections is greater than min-connections,
    the pool will continue to allocate connections until max-connections are
    used.   After this an attempt to aquire more connections from the pool
    should block (if your implementation supports it).   When a connection is
-   released (this is done automatically unless you explicity disable it) the 
+   released (this is done automatically unless you explicity disable it) the
    connection to the server is closed if we have allocated more connections
    than min-connections.
 
-   The last  allocated pool object is placed into a special variable 
+   The last  allocated pool object is placed into a special variable
    <strong>*last-database*</strong> which is defaulted from the higher level API functions."
   (setf *last-database* (make-instance 'connection-pool
+                                       :ssl-ca ssl-ca
 				       :hostname host
 				       :username user
 				       :password password
