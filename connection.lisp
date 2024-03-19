@@ -1,8 +1,8 @@
 ;;;; -*- Mode: Lisp -*-
 ;;;; $Id$
-;;;; 
+;;;;
 ;;;; Copyright (c) 2009 Steve Knight <stkni@gmail.com>
-;;;; 
+;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
 ;;;; "Software"), to deal in the Software without restriction, including
@@ -10,10 +10,10 @@
 ;;;; distribute, sublicense, and/or sell copies of the Software, and to
 ;;;; permit persons to whom the Software is furnished to do so, subject to
 ;;;; the following conditions:
-;;;; 
+;;;;
 ;;;; The above copyright notice and this permission notice shall be
 ;;;; included in all copies or substantial portions of the Software.
-;;;; 
+;;;;
 ;;;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ;;;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ;;;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -28,8 +28,8 @@
 
 (defclass connectable ()
   ()
-  (:documentation "The base class of connectability.   CL-MYSQL functions operate on a 
-   connectable which is then subclassed into a single connection and a connection pool.  
+  (:documentation "The base class of connectability.   CL-MYSQL functions operate on a
+   connectable which is then subclassed into a single connection and a connection pool.
    Note that the connectable itself has no state."))
 
 (defgeneric acquire (connectable &optional keyword)
@@ -55,7 +55,7 @@
 
 (defmethod process-result-set ((self connection) type-map)
   "Returns a CONS of all the data in the result set.   Note that this method
-   should only be called by the client if you originally sent :store NIL to 
+   should only be called by the client if you originally sent :store NIL to
    query but then set :store to T when calling next-result-set."
 
   (declare (optimize (speed 3)))
@@ -79,7 +79,9 @@
 			      (foreign-slot-value mref 'mysql-field 'name)
 			      (foreign-enum-keyword
 			       'enum-field-types
-			       (foreign-slot-value mref 'mysql-field 'type))
+			       (foreign-slot-value mref 'mysql-field 'type)
+                               ;; XXX: "245 is not defined as a value for enum type #<CFFI::FOREIGN-ENUM COM.HACKINGHAT.CL-MYSQL-SYSTEM::ENUM-FIELD-TYPES>."というエラーが出ないようにするため
+                               :errorp nil)
 			      (foreign-slot-value mref 'mysql-field 'flags))))))
 	  (setf (result-set-fields self)
 		(append
@@ -105,9 +107,9 @@
   "Position for the the next result set.  Returns T if there is a result
    set to process and NIL when the last result set has been passed.
 
-   sets.  Use this method with (query \"SELECT\" :store NIL).   Call 
+   sets.  Use this method with (query \"SELECT\" :store NIL).   Call
    next-result-set to position on the first result set then use next-row
-   to fetch all the individual rows.   
+   to fetch all the individual rows.
 
    Use dont-release if you don't want cl-mysql to release all the resources
    when the last result set has been processed.   This might be useful, for
@@ -117,7 +119,7 @@
    You can, if you wish elect to not process each individual row of a result
    set by setting :store T.   However, you cannot then use next-row because
    you must process the entire result set in one go.
- 
+
    <pre><code>CL-USER> (query \"SELECT ...\" :store nil)
    CL-USER> (next-result-set *)
    T
@@ -175,4 +177,3 @@
 
 (defmethod toggle ((self connection))
   (setf (in-use self) (not (in-use self))))
-
